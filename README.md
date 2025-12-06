@@ -1,21 +1,21 @@
 # GoBotCat
 
-Telegram бот для продажи фото через Stripe платежи.
+Telegram bot for selling photos via Stripe payments.
 
-## Установка
+## Installation
 
 ```bash
 go mod tidy
 ```
 
-## Настройка
+## Configuration
 
-1. Скопируй `.env.example` в `.env`:
+1. Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
 
-2. Заполни переменные:
+2. Fill in the variables:
 ```
 STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_SECRET_KEY=sk_test_...
@@ -24,42 +24,42 @@ WEBHOOK_URL=https://yourdomain.com
 PORT=8080
 ```
 
-## Запуск
+## Running
 
 ```bash
 go run main.go
 ```
 
-## Локальное тестирование Stripe webhook
+## Local Stripe webhook testing
 
-В отдельном терминале:
+In a separate terminal:
 ```bash
 stripe listen --forward-to localhost:8080/webhook/stripe
 ```
 
-## Использование
+## Usage
 
-- `/start` — меню
-- `/pay` — ссылка на оплату
-- Отправить фото — сохранится в `photos.json`
+- `/start` — menu
+- `/pay` — payment link
+- Send photo — saves to `photos.json`
 
-## Структура
+## Project Structure
 
 ```
-config/     — конфигурация
-handlers/   — обработчики запросов (bot, webhook)
-services/   — бизнес-логика (Stripe, Telegram)
-storage/    — хранилище (JSON для фото, SQLite для платежей)
+config/     — configuration
+handlers/   — request handlers (bot, webhook)
+services/   — business logic (Stripe, Telegram)
+storage/    — storage layer (JSON for photos, SQLite for payments)
 ```
 
-## БД
+## Databases
 
-- `photos.json` — список file_id фото по пользователям
-- `payments.db` — история платежей
+- `photos.json` — list of photo file_ids by user
+- `payments.db` — payment history
 
-## Развёртывание
+## Deployment
 
-Deploy на Railway, Render или любой хостинг:
-1. Установи Go 1.25+
-2. Установи переменные окружения
+Deploy to Railway, Render or any hosting:
+1. Ensure Go 1.25+ is installed
+2. Set environment variables
 3. `go run main.go`
