@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	"gobotcat/config"
 	"gobotcat/handlers"
 	"gobotcat/services"
@@ -15,8 +17,15 @@ import (
 func main() {
 	cfg := config.Load()
 
+	// init database
+	db, err := gorm.Open(sqlite.Open("payments.db"), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
 	// init storage
-	store := storage.NewJSONStorage("photos.json")
+	photoStore := storage.NewJSONStorage("photos.json")
+	paymentStore := storage.NewGormPaymentStore(db)
 
 	// init service 
 	stripeService := services.NewStripeService(cfg.StripeSecret)
@@ -26,8 +35,8 @@ func main() {
 	}
 
 	// init handlers
-	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, store)
-	botHandler := handlers.NewBotHandler(telegramService, stripeService, cfg.WebhookURL, store)
+	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, photoStore, paymentStore)
+	botHandler := handlers.NewBotHandler(telegramService, stripeService, cfg.WebhookURL, photoStore)
 
 	// Маршруты
 	http.HandleFunc("/webhook/stripe", webhookHandler.HandleStripeWebhook)

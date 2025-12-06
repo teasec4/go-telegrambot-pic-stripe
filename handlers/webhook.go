@@ -13,16 +13,18 @@ import (
 )
 
 type WebhookHandler struct {
-	stripe   *services.StripeService
-	telegram *services.TelegramService
-	storage  storage.Storage
+	stripe        *services.StripeService
+	telegram      *services.TelegramService
+	photoStorage  storage.Storage
+	paymentStore  storage.PaymentStore
 }
 
-func NewWebhookHandler(stripe *services.StripeService, telegram *services.TelegramService, store storage.Storage) *WebhookHandler {
+func NewWebhookHandler(stripe *services.StripeService, telegram *services.TelegramService, photoStore storage.Storage, paymentStore storage.PaymentStore) *WebhookHandler {
 	return &WebhookHandler{
-		stripe:   stripe,
-		telegram: telegram,
-		storage:  store,
+		stripe:       stripe,
+		telegram:     telegram,
+		photoStorage: photoStore,
+		paymentStore: paymentStore,
 	}
 }
 
@@ -48,28 +50,44 @@ func (h *WebhookHandler) HandleStripeWebhook(w http.ResponseWriter, r *http.Requ
 		data := event["data"].(map[string]interface{})
 		session := data["object"].(map[string]interface{})
 		
+		sessionID := session["id"].(string)
 		userID := session["client_reference_id"].(string)
 		paymentStatus := session["payment_status"].(string)
+		amountTotal := int64(session["amount_total"].(float64))
+
+		chatID, err := strconv.ParseInt(userID, 10, 64)
+		if err != nil {
+			log.Printf("Failed to parse userID: %v", err)
+			h.paymentStore.SavePayment(&storage.Payment{
+				ID:     sessionID,
+				UserID: userID,
+				Status: "failed",
+			})
+			return
+		}
+
+		// Сохраняем платёж в БД
+		payment := &storage.Payment{
+			ID:     sessionID,
+			UserID: userID,
+			Amount: amountTotal,
+			Status: "paid",
+		}
+		h.paymentStore.SavePayment(payment)
+
+		// Сообщение об успешной оплате
+		h.telegram.SendMessage(chatID, "✅ Спасибо! Ваша оплата прошла успешно.")
 
 		if paymentStatus == "paid" {
-			chatID, err := strconv.ParseInt(userID, 10, 64)
-			if err != nil {
-				log.Printf("Failed to parse userID: %v", err)
-				http.Error(w, "invalid user id", http.StatusBadRequest)
-				return
-			}
-
-			// Сообщение об успешной оплате
-			h.telegram.SendMessage(chatID, "✅ Спасибо! Ваша оплата прошла успешно.")
-
 			// TODO: получить ownerID из session, пока используем статический ID для тестирования
 			ownerID := "5147599417" // ID владельца фото
 			
 			// Получаем список фото владельца
-			photos, err := h.storage.GetPhotos(ownerID)
+			photos, err := h.photoStorage.GetPhotos(ownerID)
 			if err != nil || len(photos) == 0 {
 				log.Printf("No photos found for owner: %s", ownerID)
 				h.telegram.SendMessage(chatID, "❌ Фото не найдены")
+				h.paymentStore.UpdatePaymentStatus(sessionID, "failed")
 				return
 			}
 
@@ -82,8 +100,12 @@ func (h *WebhookHandler) HandleStripeWebhook(w http.ResponseWriter, r *http.Requ
 			if err != nil {
 				log.Printf("Failed to send image: %v", err)
 				h.telegram.SendMessage(chatID, "❌ Ошибка при отправке картинки")
+				h.paymentStore.UpdatePaymentStatus(sessionID, "failed")
 				return
 			}
+
+			// Обновляем статус на успешный
+			h.paymentStore.UpdatePaymentStatus(sessionID, "image_sent")
 		}
 	}
 
