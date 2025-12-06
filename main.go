@@ -26,7 +26,7 @@ func main() {
 	}
 
 	// init handlers
-	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService)
+	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, store)
 	botHandler := handlers.NewBotHandler(telegramService, stripeService, cfg.WebhookURL, store)
 
 	// Маршруты

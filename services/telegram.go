@@ -17,9 +17,18 @@ func NewTelegramService(token string) (*TelegramService, error) {
 	return &TelegramService{bot: bot}, nil
 }
 
-// SendImage отправляет картинку пользователю
+// SendImage отправляет картинку по URL
 func (t *TelegramService) SendImage(chatID int64, imageURL string, caption string) error {
 	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(imageURL))
+	photo.Caption = caption
+
+	_, err := t.bot.Send(photo)
+	return err
+}
+
+// SendImageByID отправляет картинку по file_id
+func (t *TelegramService) SendImageByID(chatID int64, fileID string, caption string) error {
+	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileID(fileID))
 	photo.Caption = caption
 
 	_, err := t.bot.Send(photo)

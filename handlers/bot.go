@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"gobotcat/services"
@@ -38,7 +37,9 @@ func (h *BotHandler) HandleUpdates(updates tgbotapi.UpdatesChannel) {
 
 		// Обработка фото (приоритет выше чем текст)
 		if update.Message.Photo != nil && len(update.Message.Photo) > 0 {
-			h.handlePhotoUpload(chatID, userID, update.Message.Photo[len(update.Message.Photo)-1].FileID)
+			if h.telegram.IsAdmin(chatID){
+				h.handlePhotoUpload(chatID, userID, update.Message.Photo[len(update.Message.Photo)-1].FileID)
+			}
 			continue
 		}
 
@@ -62,18 +63,6 @@ func (h *BotHandler) HandleUpdates(updates tgbotapi.UpdatesChannel) {
 }
 
 func (h *BotHandler) handlePayment(chatID int64, userID string) {
-	// Тестовое сообщение
-	h.telegram.SendMessage(chatID, "✅ Оплачено! Вот твоя картинка!")
-	
-	imageURL := fmt.Sprintf("https://cataas.com/cat?t=%d", time.Now().Unix())
-	err := h.telegram.SendImage(chatID, imageURL, "Вот котик для тебя!")
-	if err != nil {
-		log.Printf("Failed to send image: %v", err)
-		h.telegram.SendMessage(chatID, "Ошибка при отправке картинки")
-	}
-
-	// TODO: раскомментировать когда будем готовы тестировать платежи
-	/*
 	// 9.99 USD = 999 центов
 	paymentURL, err := h.stripe.CreatePaymentSession(userID, 999, h.webhookURL)
 	if err != nil {
@@ -91,7 +80,6 @@ func (h *BotHandler) handlePayment(chatID int64, userID string) {
 	msg := tgbotapi.NewMessage(chatID, "Нажми кнопку ниже для оплаты")
 	msg.ReplyMarkup = keyboard
 	h.telegram.Bot().Send(msg)
-	*/
 }
 
 func (h *BotHandler) handlePhotoUpload(chatID int64, userID string, fileID string) {
