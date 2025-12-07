@@ -4,4 +4,6 @@
 *.swo
 *~
 .DS_Store
-.photos.json
+
+photos.json
+payments.db

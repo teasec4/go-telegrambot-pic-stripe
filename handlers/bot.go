@@ -38,7 +38,18 @@ func (h *BotHandler) HandleUpdates(updates tgbotapi.UpdatesChannel) {
 		// Обработка фото (приоритет выше чем текст)
 		if update.Message.Photo != nil && len(update.Message.Photo) > 0 {
 			if h.telegram.IsAdmin(chatID){
-				h.handlePhotoUpload(chatID, userID, update.Message.Photo[len(update.Message.Photo)-1].FileID)
+				// передать сюда Photo
+				photo := &storage.Photo{
+					FileID: update.Message.Photo[len(update.Message.Photo)-1].FileID,
+				}
+				err := h.handlePhotoUpload(photo)
+
+				// и сообщение юзеру что успешно
+				if err != nil {
+					h.telegram.SendMessage(chatID, "❌ Ошибка при сохранении фото")
+				} else {
+					h.telegram.SendMessage(chatID, "✅ Фото сохранено!")
+				}
 			}
 			continue
 		}
@@ -82,13 +93,12 @@ func (h *BotHandler) handlePayment(chatID int64, userID string) {
 	h.telegram.Bot().Send(msg)
 }
 
-func (h *BotHandler) handlePhotoUpload(chatID int64, userID string, fileID string) {
-	err := h.storage.SavePhoto(userID, fileID)
+func (h *BotHandler) handlePhotoUpload(photo *storage.Photo) error{
+	err := h.storage.SavePhoto(photo)
 	if err != nil {
 		log.Printf("Failed to save photo: %v", err)
-		h.telegram.SendMessage(chatID, "❌ Ошибка при сохранении фото")
-		return
+		return err
 	}
 
-	h.telegram.SendMessage(chatID, "✅ Фото сохранено!")
+	return nil
 }

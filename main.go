@@ -17,15 +17,20 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// init database
+	// init database Payments
 	db, err := gorm.Open(sqlite.Open("payments.db"), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-
-	// init storage
-	photoStore := storage.NewJSONStorage("photos.json")
 	paymentStore := storage.NewGormPaymentStore(db)
+	
+	// init database Photo
+	db, err = gorm.Open(sqlite.Open("photo.db"), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	photoStore := storage.NewGormPhotoStore(db)
+	
 
 	// init service 
 	stripeService := services.NewStripeService(cfg.StripeSecret)
