@@ -73,8 +73,9 @@ func (h *BotHandler) HandleUpdates(updates tgbotapi.UpdatesChannel) {
 	}
 }
 
+// need to implement adding amount like 3 price range
 func (h *BotHandler) handlePayment(chatID int64, userID string) {
-	// 9.99 USD = 999 центов
+	// 9.99 USD for testing
 	paymentURL, err := h.stripe.CreatePaymentSession(userID, 999, h.webhookURL)
 	if err != nil {
 		log.Printf("Failed to create payment session: %v", err)
@@ -82,13 +83,14 @@ func (h *BotHandler) handlePayment(chatID int64, userID string) {
 		return
 	}
 
+	// creating InlineButton
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonURL("Оплатить", paymentURL),
 		),
 	)
 
-	msg := tgbotapi.NewMessage(chatID, "Нажми кнопку ниже для оплаты")
+	msg := tgbotapi.NewMessage(chatID, "Here is a link to pay by Stripe")
 	msg.ReplyMarkup = keyboard
 	h.telegram.Bot().Send(msg)
 }

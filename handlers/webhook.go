@@ -6,102 +6,106 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/stripe/stripe-go/v78"
+	"github.com/stripe/stripe-go/v78/webhook"
 	"gobotcat/services"
 	"gobotcat/storage"
 )
 
 type WebhookHandler struct {
-	stripe        *services.StripeService
-	telegram      *services.TelegramService
-	photoStore    storage.PhotoStore
-	paymentStore  storage.PaymentStore
+	stripe             *services.StripeService
+	telegram           *services.TelegramService
+	photoStore         storage.PhotoStore
+	paymentStore       storage.PaymentStore
+	webhookSecret      string
 }
 
-func NewWebhookHandler(stripe *services.StripeService, telegram *services.TelegramService, photoStore storage.PhotoStore, paymentStore storage.PaymentStore) *WebhookHandler {
+func NewWebhookHandler(stripe *services.StripeService, telegram *services.TelegramService, photoStore storage.PhotoStore, paymentStore storage.PaymentStore, webhookSecret string) *WebhookHandler {
 	return &WebhookHandler{
-		stripe:       stripe,
-		telegram:     telegram,
-		photoStore:   photoStore,
-		paymentStore: paymentStore,
+		stripe:        stripe,
+		telegram:      telegram,
+		photoStore:    photoStore,
+		paymentStore:  paymentStore,
+		webhookSecret: webhookSecret,
 	}
 }
 
 func (h *WebhookHandler) HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
+	const MaxBodyBytes = int64(65536)
+	r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "failed to read body", http.StatusBadRequest)
+		log.Printf("error reading body: %v", err)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
-	// Проверяем подпись (нужен endpointSecret из переменных окружения)
-	// event, err := h.stripe.ValidateWebhookSignature(body, sig, endpointSecret)
+	sig := r.Header.Get("Stripe-Signature")
 
-	var event map[string]interface{}
-	err = json.Unmarshal(body, &event)
+	event, err := webhook.ConstructEvent(body, sig, h.webhookSecret)
 	if err != nil {
-		http.Error(w, "failed to parse body", http.StatusBadRequest)
+		log.Printf("⚠️  Webhook signature verification failed: %v\n", err)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	// Обработка события платежа
-	if event["type"] == "checkout.session.completed" {
-		data := event["data"].(map[string]interface{})
-		session := data["object"].(map[string]interface{})
-		
-		sessionID := session["id"].(string)
-		userID := session["client_reference_id"].(string)
-		paymentStatus := session["payment_status"].(string)
-		amountTotal := int64(session["amount_total"].(float64))
-
-		chatID, err := strconv.ParseInt(userID, 10, 64)
+	switch event.Type {
+	case "checkout.session.completed":
+		var sess stripe.CheckoutSession
+		err := json.Unmarshal(event.Data.Raw, &sess)
 		if err != nil {
-			log.Printf("Failed to parse userID: %v", err)
-			h.paymentStore.SavePayment(&storage.Payment{
-				ID:     sessionID,
-				UserID: userID,
-				Status: "failed",
-			})
+			log.Printf("Error parsing webhook JSON: %v\n", err)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		// Сохраняем платёж в БД
-		payment := &storage.Payment{
-			ID:     sessionID,
-			UserID: userID,
-			Amount: amountTotal,
-			Status: "paid",
-		}
-		h.paymentStore.SavePayment(payment)
+		h.handleCheckoutSessionCompleted(sess)
 
-		// Сообщение об успешной оплате
-		h.telegram.SendMessage(chatID, "✅ Спасибо! Ваша оплата прошла успешно.")
-
-		if paymentStatus == "paid" {
-			
-			
-			// Получаем список фото владельца
-			photo, err := h.photoStore.GetRandomPhoto()
-			if err != nil || photo == nil {
-				
-				h.telegram.SendMessage(chatID, "❌ Фото не найдены")
-				h.paymentStore.UpdatePaymentStatus(sessionID, "failed")
-				return
-			}
-
-			// Отправляем картинку по file_id
-			err = h.telegram.SendImageByID(chatID, photo.FileID, "Вот ваша картинка!")
-			if err != nil {
-				log.Printf("Failed to send image: %v", err)
-				h.telegram.SendMessage(chatID, "❌ Ошибка при отправке картинки")
-				h.paymentStore.UpdatePaymentStatus(sessionID, "failed")
-				return
-			}
-
-			// Обновляем статус на успешный
-			h.paymentStore.UpdatePaymentStatus(sessionID, "image_sent")
-		}
+	default:
+		log.Printf("Unhandled event type: %s\n", event.Type)
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "received"})
+}
+
+func (h *WebhookHandler) handleCheckoutSessionCompleted(sess stripe.CheckoutSession) {
+	userID := sess.ClientReferenceID
+	chatID, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		log.Printf("Failed to parse userID: %v\n", err)
+		return
+	}
+
+	payment := &storage.Payment{
+		ID:     sess.ID,
+		UserID: userID,
+		Amount: sess.AmountTotal,
+		Status: "paid",
+	}
+	h.paymentStore.SavePayment(payment)
+
+	h.telegram.SendMessage(chatID, "✅ Спасибо! Ваша оплата прошла успешно.")
+
+	if sess.PaymentStatus == "paid" {
+		photo, err := h.photoStore.GetRandomPhoto()
+		if err != nil || photo == nil {
+			h.telegram.SendMessage(chatID, "❌ Фото не найдены")
+			h.paymentStore.UpdatePaymentStatus(sess.ID, "failed")
+			return
+		}
+
+		err = h.telegram.SendImageByID(chatID, photo.FileID, "Вот ваша картинка!")
+		if err != nil {
+			log.Printf("Failed to send image: %v\n", err)
+			h.telegram.SendMessage(chatID, "❌ Ошибка при отправке картинки")
+			h.paymentStore.UpdatePaymentStatus(sess.ID, "failed")
+			return
+		}
+
+		h.paymentStore.UpdatePaymentStatus(sess.ID, "image_sent")
+	}
 }

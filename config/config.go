@@ -9,6 +9,7 @@ import (
 type Config struct {
 	StripeKey    string
 	StripeSecret string
+	StripeWebhookSecret string
 	TelegramKey  string
 	WebhookURL   string
 	Port         string
@@ -20,6 +21,7 @@ func Load() *Config {
 	return &Config{
 		StripeKey:    getEnv("STRIPE_PUBLISHABLE_KEY", ""),
 		StripeSecret: getEnv("STRIPE_SECRET_KEY", ""),
+		StripeWebhookSecret: getEnv("STRIPE_WEBHOOK_SECRET", ""),
 		TelegramKey:  getEnv("TELEGRAM_BOT_TOKEN", ""),
 		WebhookURL:   getEnv("WEBHOOK_URL", "http://localhost:8080"),
 		Port:         getEnv("PORT", "8080"),
