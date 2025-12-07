@@ -1,1 +1,6 @@
+// host stripe webhook for testing
 stripe listen --forward-to localhost:8080/webhook/stripe
+
+// build and run docker
+docker build -t gobotcat .
+docker run --env-file .env -p 8080:8080 gobotcat
