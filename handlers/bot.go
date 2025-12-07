@@ -14,15 +14,15 @@ type BotHandler struct {
 	telegram *services.TelegramService
 	stripe   *services.StripeService
 	webhookURL string
-	storage  storage.Storage
+	photoStore storage.PhotoStore
 }
 
-func NewBotHandler(telegram *services.TelegramService, stripe *services.StripeService, webhookURL string, store storage.Storage) *BotHandler {
+func NewBotHandler(telegram *services.TelegramService, stripe *services.StripeService, webhookURL string, photoStore storage.PhotoStore) *BotHandler {
 	return &BotHandler{
 		telegram: telegram,
 		stripe: stripe,
 		webhookURL: webhookURL,
-		storage: store,
+		photoStore: photoStore,
 	}
 }
 
@@ -94,7 +94,7 @@ func (h *BotHandler) handlePayment(chatID int64, userID string) {
 }
 
 func (h *BotHandler) handlePhotoUpload(photo *storage.Photo) error{
-	err := h.storage.SavePhoto(photo)
+	err := h.photoStore.SavePhoto(photo)
 	if err != nil {
 		log.Printf("Failed to save photo: %v", err)
 		return err

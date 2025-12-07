@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type Storage interface {
+type PhotoStore interface {
 	SavePhoto(photo *Photo) error
 	GetRandomPhoto() (*Photo, error)
 }
