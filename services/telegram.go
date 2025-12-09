@@ -17,7 +17,7 @@ func NewTelegramService(token string) (*TelegramService, error) {
 	return &TelegramService{bot: bot}, nil
 }
 
-// SendImage отправляет картинку по URL
+// SendImage sends an image by URL
 func (t *TelegramService) SendImage(chatID int64, imageURL string, caption string) error {
 	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileURL(imageURL))
 	photo.Caption = caption
@@ -26,7 +26,7 @@ func (t *TelegramService) SendImage(chatID int64, imageURL string, caption strin
 	return err
 }
 
-// SendImageByID отправляет картинку по file_id
+// SendImageByID sends an image by file ID
 func (t *TelegramService) SendImageByID(chatID int64, fileID string, caption string) error {
 	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileID(fileID))
 	photo.Caption = caption
@@ -35,7 +35,7 @@ func (t *TelegramService) SendImageByID(chatID int64, fileID string, caption str
 	return err
 }
 
-// SendMessage отправляет текстовое сообщение
+// SendMessage sends a text message
 func (t *TelegramService) SendMessage(chatID int64, message string) error {
 	msg := tgbotapi.NewMessage(chatID, message)
 	_, err := t.bot.Send(msg)
@@ -43,15 +43,17 @@ func (t *TelegramService) SendMessage(chatID int64, message string) error {
 }
 
 
-// Bot возвращает экземпляр бота для прямого доступа
+// Bot returns the bot instance for direct access
 func (t *TelegramService) Bot() *tgbotapi.BotAPI {
 	return t.bot
 }
 
+// Admin represents an administrator for photo uploads. Not the best practice but simple and works for now.
 type Admin struct{
 	ChatID int64
 }
 
+// Manually add an admin's ID. You can get it in your terminal by typing /id in the bot.
 var admins = []Admin{Admin{ChatID: 5147599417}}
 
 func (t *TelegramService) IsAdmin(chatID int64) bool {

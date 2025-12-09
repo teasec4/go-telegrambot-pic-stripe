@@ -5,9 +5,10 @@ import (
 	"log"
 	"strconv"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"gobotcat/services"
 	"gobotcat/storage"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type BotHandler struct {
@@ -35,26 +36,26 @@ func (h *BotHandler) HandleUpdates(updates tgbotapi.UpdatesChannel) {
 		chatID := update.Message.Chat.ID
 		userID := strconv.FormatInt(update.Message.From.ID, 10)
 
-		// Обработка фото (приоритет выше чем текст)
+		// Handle photos (higher priority than text)
 		if update.Message.Photo != nil && len(update.Message.Photo) > 0 {
 			if h.telegram.IsAdmin(chatID){
-				// передать сюда Photo
 				photo := &storage.Photo{
+					// Get the highest quality photo. Telegram provides multiple sizes; the last one has the best quality.
 					FileID: update.Message.Photo[len(update.Message.Photo)-1].FileID,
 				}
 				err := h.handlePhotoUpload(photo)
 
-				// и сообщение юзеру что успешно
+				// Send a message to the user about the result
 				if err != nil {
-					h.telegram.SendMessage(chatID, "❌ Ошибка при сохранении фото")
+					h.telegram.SendMessage(chatID, "❌ Failed to save photo")
 				} else {
-					h.telegram.SendMessage(chatID, "✅ Фото сохранено!")
+					h.telegram.SendMessage(chatID, "✅ Photo saved successfully!")
 				}
 			}
 			continue
 		}
 
-		// Обработка текста
+		// Handle text messages
 		text := update.Message.Text
 		if text == "" {
 			continue
@@ -62,31 +63,31 @@ func (h *BotHandler) HandleUpdates(updates tgbotapi.UpdatesChannel) {
 
 		switch text {
 		case "/start":
-			h.telegram.SendMessage(chatID, "Привет! Напиши /pay для оплаты картинки")
+			h.telegram.SendMessage(chatID, "Hello! Type /pay to purchase an image")
 		case "/pay":
 			h.handlePayment(chatID, userID)
 		case "/id":
 			fmt.Println(chatID)
 		default:
-			h.telegram.SendMessage(chatID, "Неизвестная команда. Используй /pay")
+			h.telegram.SendMessage(chatID, "Unknown command. Use /pay")
 		}
 	}
 }
 
-// need to implement adding amount like 3 price range
+// TODO: implement price selection like 3 price tiers
 func (h *BotHandler) handlePayment(chatID int64, userID string) {
 	// 9.99 USD for testing
 	paymentURL, err := h.stripe.CreatePaymentSession(userID, 999, h.webhookURL)
 	if err != nil {
 		log.Printf("Failed to create payment session: %v", err)
-		h.telegram.SendMessage(chatID, "Ошибка при создании платежа")
+		h.telegram.SendMessage(chatID, "Failed to create payment session")
 		return
 	}
 
-	// creating InlineButton
+	// Create inline button
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonURL("Оплатить", paymentURL),
+			tgbotapi.NewInlineKeyboardButtonURL("Pay for photo", paymentURL),
 		),
 	)
 

@@ -45,7 +45,7 @@ func (s *StripeService) CreatePaymentSession(userID string, amount int64, return
 	return sess.URL, nil
 }
 
-// ValidateWebhookSignature проверяет подпись webhook
+// ValidateWebhookSignature validates the webhook signature
 func (s *StripeService) ValidateWebhookSignature(body []byte, sig string, endpointSecret string) ([]byte, error) {
 	event, err := webhook.ConstructEvent(body, sig, endpointSecret)
 	if err != nil {

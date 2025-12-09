@@ -75,6 +75,7 @@ func (h *WebhookHandler) HandleStripeWebhook(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *WebhookHandler) handleCheckoutSessionCompleted(sess stripe.CheckoutSession) {
+	// userID and chatID actualy the same, in telegram chat bot see you like a chatID, but for Stripe make more sence be use "userID" (chatID), or I make it wrong sorry))
 	userID := sess.ClientReferenceID
 	chatID, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil {
@@ -90,20 +91,20 @@ func (h *WebhookHandler) handleCheckoutSessionCompleted(sess stripe.CheckoutSess
 	}
 	h.paymentStore.SavePayment(payment)
 
-	h.telegram.SendMessage(chatID, "✅ Спасибо! Ваша оплата прошла успешно.")
+	h.telegram.SendMessage(chatID, "✅ Thank you! Your payment was successful.")
 
 	if sess.PaymentStatus == "paid" {
 		photo, err := h.photoStore.GetRandomPhoto()
 		if err != nil || photo == nil {
-			h.telegram.SendMessage(chatID, "❌ Фото не найдены")
+			h.telegram.SendMessage(chatID, "❌ No photos found")
 			h.paymentStore.UpdatePaymentStatus(sess.ID, "failed")
 			return
 		}
 
-		err = h.telegram.SendImageByID(chatID, photo.FileID, "Вот ваша картинка!")
+		err = h.telegram.SendImageByID(chatID, photo.FileID, "Here is your image!")
 		if err != nil {
 			log.Printf("Failed to send image: %v\n", err)
-			h.telegram.SendMessage(chatID, "❌ Ошибка при отправке картинки")
+			h.telegram.SendMessage(chatID, "❌ Error sending image")
 			h.paymentStore.UpdatePaymentStatus(sess.ID, "failed")
 			return
 		}

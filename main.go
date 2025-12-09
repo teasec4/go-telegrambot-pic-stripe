@@ -18,14 +18,14 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// init database Payments
+	// Initialize Payments database
 	db, err := gorm.Open(sqlite.Open("payments.db"), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to Payments database: %v", err)
 	}
 	paymentStore := storage.NewGormPaymentStore(db)
 	
-	// init database Photo
+	// Initialize Photo database
 	db, err = gorm.Open(sqlite.Open("photo.db"), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to Photo database: %v", err)
@@ -33,14 +33,14 @@ func main() {
 	photoStore := storage.NewGormPhotoStore(db)
 	
 
-	// init service 
+	// Initialize services
 	stripeService := services.NewStripeService(cfg.StripeSecret)
 	telegramService, err := services.NewTelegramService(cfg.TelegramKey)
 	if err != nil {
 		log.Fatalf("Failed to initialize Telegram bot: %v", err)
 	}
 
-	// init handlers
+	// Initialize handlers
 	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, photoStore, paymentStore, cfg.StripeWebhookSecret)
 	botHandler := handlers.NewBotHandler(telegramService, stripeService, cfg.WebhookURL, photoStore)
 
@@ -48,7 +48,7 @@ func main() {
 	successTpl := template.Must(template.ParseFiles("templates/success.html"))
 	canceledTpl := template.Must(template.ParseFiles("templates/canceled.html"))
 
-	// Routers
+	// Routes
 	http.HandleFunc("/webhook/stripe", webhookHandler.HandleStripeWebhook)
 	http.HandleFunc("/payment-success", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -63,7 +63,7 @@ func main() {
 		fmt.Fprintf(w, "OK")
 	})
 
-	// Запуск Telegram bot в горутине
+	// Start Telegram bot in a goroutine
 	go func() {
 		u := tgbotapi.NewUpdate(0)
 		u.Timeout = 60
@@ -72,7 +72,7 @@ func main() {
 		botHandler.HandleUpdates(updates)
 	}()
 
-	// Запуск сервера
+	// Start server
 	fmt.Printf("Starting server on port %s\n", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, nil))
 }
