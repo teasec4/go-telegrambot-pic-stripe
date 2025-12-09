@@ -32,8 +32,8 @@ func (s *StripeService) CreatePaymentSession(userID string, amount int64, return
 			},
 		},
 		Mode:       stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL: stripe.String(returnURL + "?success=true"),
-		CancelURL:  stripe.String(returnURL + "?canceled=true"),
+		SuccessURL: stripe.String(returnURL + "/payment-success"),
+		CancelURL:  stripe.String(returnURL + "/payment-canceled"),
 		ClientReferenceID: stripe.String(userID),
 	}
 

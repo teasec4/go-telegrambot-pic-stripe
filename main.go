@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 
@@ -20,14 +21,14 @@ func main() {
 	// init database Payments
 	db, err := gorm.Open(sqlite.Open("payments.db"), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to Payments database: %v", err)
 	}
 	paymentStore := storage.NewGormPaymentStore(db)
 	
 	// init database Photo
 	db, err = gorm.Open(sqlite.Open("photo.db"), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to Photo database: %v", err)
 	}
 	photoStore := storage.NewGormPhotoStore(db)
 	
@@ -43,8 +44,20 @@ func main() {
 	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, photoStore, paymentStore, cfg.StripeWebhookSecret)
 	botHandler := handlers.NewBotHandler(telegramService, stripeService, cfg.WebhookURL, photoStore)
 
-	// Маршруты
+	// Parse payment templates
+	successTpl := template.Must(template.ParseFiles("templates/success.html"))
+	canceledTpl := template.Must(template.ParseFiles("templates/canceled.html"))
+
+	// Routers
 	http.HandleFunc("/webhook/stripe", webhookHandler.HandleStripeWebhook)
+	http.HandleFunc("/payment-success", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		successTpl.Execute(w, nil)
+	})
+	http.HandleFunc("/payment-canceled", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		canceledTpl.Execute(w, nil)
+	})
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "OK")
