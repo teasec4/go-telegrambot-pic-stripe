@@ -100,6 +100,44 @@ config/        → Configuration management
 - Polling every 30 seconds for payment confirmation
 - Balance-check based verification (testing approach)
 
+## Admin Setup (Photo Management)
+
+### 1. Get Your Telegram ID
+
+Send `/id` command to the bot. Your ID will appear in server logs:
+
+```
+2025/12/11 15:30:45 1234567890
+```
+
+### 2. Add ID to Admin List
+
+Open `services/telegram.go` and replace the admin ID:
+
+```go
+var admins = []Admin{Admin{ChatID: YOUR_ID_HERE}}
+```
+
+Example:
+```go
+var admins = []Admin{Admin{ChatID: 1234567890}}
+```
+
+### 3. Upload Photos
+
+As admin, simply send photos to bot. Each photo is saved to database with Telegram file ID.
+
+### 4. How It Works
+
+- Photos stored in `photo.db` (SQLite database)
+- When buyer completes payment → bot sends **random photo** from database
+- Multiple photos = more variety for buyers
+
+**Example flow:**
+1. Admin uploads 10 photos to bot
+2. Buyer pays
+3. Bot randomly selects one of 10 photos and sends to buyer
+
 ## Deployment
 
 Requires Go 1.22+
