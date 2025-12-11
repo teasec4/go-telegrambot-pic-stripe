@@ -26,15 +26,6 @@ func (t *TelegramService) SendImage(chatID int64, imageURL string, caption strin
 	return err
 }
 
-// SendImageByID sends an image by file ID
-func (t *TelegramService) SendImageByID(chatID int64, fileID string, caption string) error {
-	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileID(fileID))
-	photo.Caption = caption
-
-	_, err := t.bot.Send(photo)
-	return err
-}
-
 // SendMessage sends a text message
 func (t *TelegramService) SendMessage(chatID int64, message string) error {
 	msg := tgbotapi.NewMessage(chatID, message)

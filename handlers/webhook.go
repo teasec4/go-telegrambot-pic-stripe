@@ -56,6 +56,7 @@ func (h *WebhookHandler) HandleStripeWebhook(w http.ResponseWriter, r *http.Requ
 	switch event.Type {
 	case "checkout.session.completed":
 		var sess stripe.CheckoutSession
+		// making a struct data for woking on late (sess)
 		err := json.Unmarshal(event.Data.Raw, &sess)
 		if err != nil {
 			log.Printf("Error parsing webhook JSON: %v\n", err)
@@ -76,8 +77,8 @@ func (h *WebhookHandler) HandleStripeWebhook(w http.ResponseWriter, r *http.Requ
 
 func (h *WebhookHandler) handleCheckoutSessionCompleted(sess stripe.CheckoutSession) {
 	// userID and chatID actualy the same, in telegram chat bot see you like a chatID, but for Stripe make more sence be use "userID" (chatID), or I make it wrong sorry))
-	userID := sess.ClientReferenceID
-	chatID, err := strconv.ParseInt(userID, 10, 64)
+	userID := sess.ClientReferenceID //string
+	chatID, err := strconv.ParseInt(userID, 10, 64) // same but int
 	if err != nil {
 		log.Printf("Failed to parse userID: %v\n", err)
 		return
@@ -101,7 +102,7 @@ func (h *WebhookHandler) handleCheckoutSessionCompleted(sess stripe.CheckoutSess
 			return
 		}
 
-		err = h.telegram.SendImageByID(chatID, photo.FileID, "Here is your image!")
+		err = h.telegram.SendImage(chatID, photo.FileID, "Here is your image!")
 		if err != nil {
 			log.Printf("Failed to send image: %v\n", err)
 			h.telegram.SendMessage(chatID, "❌ Error sending image")
