@@ -35,14 +35,23 @@ func main() {
 
 	// Initialize services
 	stripeService := services.NewStripeService(cfg.StripeSecret)
+	tronService := services.NewTronService(cfg.TronAPIKey, cfg.TronMainAddress)
 	telegramService, err := services.NewTelegramService(cfg.TelegramKey)
 	if err != nil {
 		log.Fatalf("Failed to initialize Telegram bot: %v", err)
 	}
 
+	// Initialize Tron payments database
+	tronPaymentsDB, err := gorm.Open(sqlite.Open("tron_payments.db"), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to Tron payments database: %v", err)
+	}
+	tronPaymentStore := storage.NewGormTronPaymentStore(tronPaymentsDB)
+
 	// Initialize handlers
 	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, photoStore, paymentStore, cfg.StripeWebhookSecret)
-	botHandler := handlers.NewBotHandler(telegramService, stripeService, cfg.WebhookURL, photoStore)
+	tronWebhookHandler := handlers.NewTronWebhookHandler(tronService, telegramService, tronPaymentStore, photoStore)
+	botHandler := handlers.NewBotHandler(telegramService, stripeService, tronService, cfg.WebhookURL, photoStore, tronPaymentStore)
 
 	// Parse payment templates
 	successTpl := template.Must(template.ParseFiles("templates/success.html"))
@@ -50,6 +59,7 @@ func main() {
 
 	// Routes
 	http.HandleFunc("/webhook/stripe", webhookHandler.HandleStripeWebhook)
+	http.HandleFunc("/webhook/tron", tronWebhookHandler.HandleTronWebhook)
 	http.HandleFunc("/payment-success", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		successTpl.Execute(w, nil)
@@ -62,6 +72,9 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "OK")
 	})
+
+	// Start Tron payment checker in a goroutine
+	go tronWebhookHandler.CheckPendingPayments()
 
 	// Start Telegram bot in a goroutine
 	go func() {
