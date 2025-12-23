@@ -18,32 +18,23 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// Initialize single database for all data
+	// Initialize database and storer
 	db := openDatabase("app.db")
-	
-	// Initialize storer
 	appStorer := storer.NewGormStorer(db)
 
 	// Initialize services
-	stripeService := services.NewStripeService(cfg.StripeSecret)
-	tronService := services.NewTronService(cfg.TronAPIKey, cfg.TronMainAddress)
-	telegramService, err := services.NewTelegramService(cfg.TelegramKey)
-	if err != nil {
-		log.Fatalf("Failed to initialize Telegram bot: %v", err)
-	}
+	svc := services.NewServicesFromConfig(cfg)
 
 	// Initialize handlers
-	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, appStorer, cfg.StripeWebhookSecret)
-	tronWebhookHandler := handlers.NewTronWebhookHandler(tronService, telegramService, appStorer)
-	botHandler := handlers.NewBotHandler(telegramService, stripeService, tronService, cfg.WebhookURL, appStorer)
+	h := handlers.NewHandlers(svc, appStorer, cfg.WebhookURL, cfg.StripeWebhookSecret)
 
 	// Parse payment templates
 	successTpl := template.Must(template.ParseFiles("templates/success.html"))
 	canceledTpl := template.Must(template.ParseFiles("templates/canceled.html"))
 
 	// Routes
-	http.HandleFunc("/webhook/stripe", webhookHandler.HandleStripeWebhook)
-	http.HandleFunc("/webhook/tron", tronWebhookHandler.HandleTronWebhook)
+	http.HandleFunc("/webhook/stripe", h.Webhook.HandleStripeWebhook)
+	http.HandleFunc("/webhook/tron", h.TronWebhook.HandleTronWebhook)
 	http.HandleFunc("/payment-success", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		successTpl.Execute(w, nil)
@@ -58,15 +49,15 @@ func main() {
 	})
 
 	// Start Tron payment checker in a goroutine
-	go tronWebhookHandler.CheckPendingPayments()
+	go h.TronWebhook.CheckPendingPayments()
 
 	// Start Telegram bot in a goroutine
 	go func() {
 		u := tgbotapi.NewUpdate(0)
 		u.Timeout = 60
 
-		updates := telegramService.Bot().GetUpdatesChan(u)
-		botHandler.HandleUpdates(updates)
+		updates := svc.Telegram.Bot().GetUpdatesChan(u)
+		h.Bot.HandleUpdates(updates)
 	}()
 
 	// Start server
