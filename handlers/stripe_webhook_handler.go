@@ -86,7 +86,11 @@ func (h *WebhookHandler) handleCheckoutSessionCompleted(sess stripe.CheckoutSess
 		Amount: sess.AmountTotal,
 		Status: "paid",
 	}
-	h.storer.SavePayment(payment)
+	if err := h.storer.SavePayment(payment); err != nil {
+		log.Printf("Failed to save payment: %v", err)
+		h.services.Telegram.SendMessage(chatID, "❌ Payment recorded but failed to process. Contact admin.")
+		return
+	}
 
 	h.services.Telegram.SendMessage(chatID, "✅ Thank you! Your payment was successful.")
 

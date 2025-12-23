@@ -187,9 +187,9 @@ func (h *BotHandler) handlePhotoUpload(photo *storer.Photo) error{
 }
 
 func (h *BotHandler) createOrUpdateTronPayment(userID, address string) *storer.Payment {
-	existingPayment, _ := h.storer.GetTronPaymentByAddress(address)
+	existingPayment, err := h.storer.GetTronPaymentByAddress(address)
 	
-	if existingPayment != nil {
+	if err == nil && existingPayment != nil {
 		existingPayment.UserID = userID
 		existingPayment.Amount = 10_000_000 // 10 TRX with 6 decimals
 		existingPayment.AmountUSD = 10.0

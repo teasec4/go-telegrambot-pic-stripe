@@ -39,17 +39,13 @@ func (t *TelegramService) Bot() *tgbotapi.BotAPI {
 	return t.bot
 }
 
-// Admin represents an administrator for photo uploads. Not the best practice but simple and works for now.
-type Admin struct{
-	ChatID int64
-}
-
-// Manually add an admin's ID. You can get it in your terminal by typing /id in the bot.
-var admins = []Admin{Admin{ChatID: 5147599417}}
-
+// IsAdmin checks if a user is an administrator
+// TODO: Move admin IDs to configuration instead of hardcoding
+// For now, update this slice with your admin IDs
 func (t *TelegramService) IsAdmin(chatID int64) bool {
-	for _, admin := range admins {
-		if admin.ChatID == chatID {
+	admins := []int64{5147599417} // Update with actual admin IDs
+	for _, adminID := range admins {
+		if adminID == chatID {
 			return true
 		}
 	}

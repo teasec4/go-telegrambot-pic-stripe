@@ -121,16 +121,10 @@ func (s *TronService) checkTRXBalance(address string) (*TronBalance, error) {
 		return nil, err
 	}
 
-	// TESTNET DEBUG: Print raw API response (remove for production)
-	fmt.Printf("[DEBUG] Raw response for %s: %s\n", address, string(body))
-
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
-
-	// TESTNET DEBUG: Print parsed JSON keys (remove for production)
-	fmt.Printf("[DEBUG] Parsed JSON keys: %v\n", getKeys(result))
 
 	var amount int64 = 0
 	
@@ -140,8 +134,6 @@ func (s *TronService) checkTRXBalance(address string) (*TronBalance, error) {
 		if accountData, ok := data[0].(map[string]interface{}); ok {
 			if balance, ok := accountData["balance"].(float64); ok {
 				amount = int64(balance)
-				// TESTNET DEBUG: Log found balance (remove for production)
-				fmt.Printf("[DEBUG] Found balance: %d\n", amount)
 			}
 		}
 	}
@@ -293,9 +285,6 @@ func (s *TronService) GetAddressTransactions(address string) ([]TronTransaction,
 	if err != nil {
 		return nil, err
 	}
-
-	// TESTNET DEBUG: Print transactions response (remove for production)
-	fmt.Printf("[DEBUG] Transactions response: %s\n", string(body))
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {

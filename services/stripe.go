@@ -11,8 +11,10 @@ type StripeService struct {
 }
 
 func NewStripeService(secretKey string) *StripeService {
-	stripe.Key = secretKey
-	return &StripeService{secretKey: secretKey}
+	stripe.Key = secretKey // Required by stripe-go SDK initialization
+	return &StripeService{
+		secretKey: secretKey,
+	}
 }
 
 // Create Payment Session

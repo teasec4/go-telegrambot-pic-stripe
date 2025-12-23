@@ -58,7 +58,13 @@ func (h *TronWebhookHandler) HandleTronWebhook(w http.ResponseWriter, r *http.Re
 	// Get payment record by recipient address
 	payment, err := h.storer.GetTronPaymentByAddress(payload.To)
 	if err != nil {
+		log.Printf("Payment not found for address %s: %v", payload.To, err)
 		w.WriteHeader(http.StatusOK) // Still return 200 to not retry webhook
+		return
+	}
+	if payment == nil {
+		log.Printf("No payment found for address %s", payload.To)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
