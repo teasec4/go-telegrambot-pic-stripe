@@ -7,28 +7,26 @@ import (
 	"time"
 
 	"gobotcat/services"
-	"gobotcat/storage"
+	"gobotcat/storer"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type BotHandler struct {
-	telegram      *services.TelegramService
-	stripe        *services.StripeService
-	tron          *services.TronService
-	webhookURL    string
-	photoStore    storage.PhotoStore
-	tronPayments  storage.TronPaymentStore
+	telegram   *services.TelegramService
+	stripe     *services.StripeService
+	tron       *services.TronService
+	webhookURL string
+	storer     *storer.GormStorer
 }
 
-func NewBotHandler(telegram *services.TelegramService, stripe *services.StripeService, tron *services.TronService, webhookURL string, photoStore storage.PhotoStore, tronPayments storage.TronPaymentStore) *BotHandler {
+func NewBotHandler(telegram *services.TelegramService, stripe *services.StripeService, tron *services.TronService, webhookURL string, storer *storer.GormStorer) *BotHandler {
 	return &BotHandler{
-		telegram:     telegram,
-		stripe:       stripe,
-		tron:         tron,
-		webhookURL:   webhookURL,
-		photoStore:   photoStore,
-		tronPayments: tronPayments,
+		telegram:   telegram,
+		stripe:     stripe,
+		tron:       tron,
+		webhookURL: webhookURL,
+		storer:     storer,
 	}
 }
 
@@ -113,7 +111,6 @@ func (h *BotHandler) handlePaymentMenu(chatID int64, userID string) {
 
 // Handle Stripe payment
 func (h *BotHandler) handleStripePayment(chatID int64, userID string) {
-	// Show loading message
 	h.telegram.SendMessage(chatID, "⏳ Preparing your payment link... Please wait a moment")
 
 	paymentURL, err := h.stripe.CreatePaymentSession(userID, 999, h.webhookURL)
@@ -136,10 +133,8 @@ func (h *BotHandler) handleStripePayment(chatID int64, userID string) {
 
 // Handle USDT payment
 func (h *BotHandler) handleUSDTPayment(chatID int64, userID string) {
-	// Show loading message
 	h.telegram.SendMessage(chatID, "⏳ Preparing your payment address... Please wait a moment")
 
-	// Get main Tron address
 	mainAddress := h.tron.GetMainAddress()
 	if mainAddress == "" {
 		log.Printf("ERROR: Tron main address not configured in TRON_MAIN_ADDRESS env var")
@@ -147,44 +142,10 @@ func (h *BotHandler) handleUSDTPayment(chatID int64, userID string) {
 		return
 	}
 
-	// Check if payment already exists for this address
-	existingPayment, _ := h.tronPayments.GetTronPaymentByAddress(mainAddress)
-	
-	var payment *storage.TronPayment
-	if existingPayment != nil {
-		// Update existing payment
-		existingPayment.UserID = userID
-		existingPayment.Amount = 10_000_000 // 10 TRX with 6 decimals
-		existingPayment.AmountUSD = 10.0
-		existingPayment.Status = "pending"
-		existingPayment.TxID = ""
-		existingPayment.CreatedAt = int64(time.Now().Unix())
-		existingPayment.ExpiresAt = int64(time.Now().Unix()) + 86400 // 24 hours
-		existingPayment.ConfirmedAt = 0
-		
-		if err := h.tronPayments.UpdateTronPayment(existingPayment); err != nil {
-			log.Printf("Failed to update payment: %v", err)
-			h.telegram.SendMessage(chatID, "Failed to create payment")
-			return
-		}
-		payment = existingPayment
-	} else {
-		// Create new payment
-		payment = &storage.TronPayment{
-			UserID:    userID,
-			Address:   mainAddress,
-			Amount:    10_000_000, // 10 TRX with 6 decimals
-			AmountUSD: 10.0,
-			Status:    "pending",
-			CreatedAt: int64(time.Now().Unix()),
-			ExpiresAt: int64(time.Now().Unix()) + 86400, // 24 hours
-		}
-
-		if err := h.tronPayments.SaveTronPayment(payment); err != nil {
-			log.Printf("Failed to save payment: %v", err)
-			h.telegram.SendMessage(chatID, "Failed to create payment")
-			return
-		}
+	payment := h.createOrUpdateTronPayment(userID, mainAddress)
+	if payment == nil {
+		h.telegram.SendMessage(chatID, "Failed to create payment")
+		return
 	}
 
 	// Send payment address to user
@@ -220,11 +181,49 @@ func (h *BotHandler) handleCallback(query *tgbotapi.CallbackQuery) {
 }
 
 func (h *BotHandler) handlePhotoUpload(photo *storage.Photo) error{
-	err := h.photoStore.SavePhoto(photo)
+	err := h.storer.SavePhoto(photo)
 	if err != nil {
 		log.Printf("Failed to save photo: %v", err)
 		return err
 	}
 
 	return nil
+}
+
+func (h *BotHandler) createOrUpdateTronPayment(userID, address string) *storer.Payment {
+	existingPayment, _ := h.storer.GetTronPaymentByAddress(address)
+	
+	if existingPayment != nil {
+		existingPayment.UserID = userID
+		existingPayment.Amount = 10_000_000 // 10 TRX with 6 decimals
+		existingPayment.AmountUSD = 10.0
+		existingPayment.Status = "pending"
+		existingPayment.TxID = ""
+		existingPayment.CreatedAt = time.Now()
+		existingPayment.ExpiresAt = time.Now().Unix() + 86400 // 24 hours
+		
+		if err := h.storer.UpdateTronPayment(existingPayment); err != nil {
+			log.Printf("Failed to update payment: %v", err)
+			return nil
+		}
+		return existingPayment
+	}
+	
+	payment := &storer.Payment{
+		UserID:    userID,
+		Type:      "tron",
+		Address:   address,
+		Amount:    10_000_000, // 10 TRX with 6 decimals
+		AmountUSD: 10.0,
+		Status:    "pending",
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Unix() + 86400, // 24 hours
+	}
+
+	if err := h.storer.SaveTronPayment(payment); err != nil {
+		log.Printf("Failed to save payment: %v", err)
+		return nil
+	}
+	
+	return payment
 }

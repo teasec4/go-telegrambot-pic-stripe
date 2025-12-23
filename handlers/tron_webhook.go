@@ -8,16 +8,15 @@ import (
 	"time"
 
 	"gobotcat/services"
-	"gobotcat/storage"
+	"gobotcat/storer"
 )
 
 // TronWebhookHandler processes incoming Tron blockchain events and payment confirmations
 // Coordinates between Tron blockchain, payment storage, and Telegram notifications
 type TronWebhookHandler struct {
-	tronService   *services.TronService     // Service for Tron blockchain interactions
-	telegramSvc   *services.TelegramService // Service for sending Telegram messages to users
-	tronPayments  storage.TronPaymentStore  // Database store for payment records
-	photoStore    storage.PhotoStore        // Database store for photo data
+	tronService *services.TronService      // Service for Tron blockchain interactions
+	telegramSvc *services.TelegramService  // Service for sending Telegram messages to users
+	storer      *storer.GormStorer         // Database store for payment and photo records
 }
 
 // TronWebhookPayload represents a payment notification received from Tron webhook or polling
@@ -34,14 +33,12 @@ type TronWebhookPayload struct {
 func NewTronWebhookHandler(
 	tronSvc *services.TronService,
 	telegramSvc *services.TelegramService,
-	tronPayments storage.TronPaymentStore,
-	photoStore storage.PhotoStore,
+	storer *storer.GormStorer,
 ) *TronWebhookHandler {
 	return &TronWebhookHandler{
-		tronService:  tronSvc,
-		telegramSvc:  telegramSvc,
-		tronPayments: tronPayments,
-		photoStore:   photoStore,
+		tronService: tronSvc,
+		telegramSvc: telegramSvc,
+		storer:      storer,
 	}
 }
 
@@ -62,7 +59,7 @@ func (h *TronWebhookHandler) HandleTronWebhook(w http.ResponseWriter, r *http.Re
 	}
 
 	// Get payment record by recipient address
-	payment, err := h.tronPayments.GetTronPaymentByAddress(payload.To)
+	payment, err := h.storer.GetTronPaymentByAddress(payload.To)
 	if err != nil {
 		w.WriteHeader(http.StatusOK) // Still return 200 to not retry webhook
 		return
@@ -76,10 +73,10 @@ func (h *TronWebhookHandler) HandleTronWebhook(w http.ResponseWriter, r *http.Re
 	payment.Amount = payload.Amount
 	payment.BlockNumber = payload.BlockNum
 	payment.Status = "confirmed"
-	payment.ConfirmedAt = time.Now().Unix()
+	payment.ConfirmedAt = time.Now()
 	payment.Confirmations = 25 // Assume webhook indicates sufficient confirmations
 
-	if err := h.tronPayments.UpdateTronPayment(payment); err != nil {
+	if err := h.storer.UpdateTronPayment(payment); err != nil {
 		log.Printf("Failed to update payment: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -114,7 +111,7 @@ func (h *TronWebhookHandler) CheckPendingPayments() {
 		log.Printf("[TRON] Checking pending payments...")
 		
 		// Fetch all pending payments from database
-		payments, err := h.tronPayments.GetPendingTronPayments()
+		payments, err := h.storer.GetPendingTronPayments()
 		if err != nil {
 			log.Printf("[TRON] Failed to get pending payments: %v", err)
 			continue
@@ -126,10 +123,10 @@ func (h *TronWebhookHandler) CheckPendingPayments() {
 			log.Printf("[TRON] Checking payment for address %s, expected amount: %d sun", payment.Address, payment.Amount)
 			
 			// Check if address expired (24-hour TTL for payment addresses)
-			if time.Now().Unix()-payment.CreatedAt > 86400 {
+			if time.Now().Unix()-payment.CreatedAt.Unix() > 86400 {
 				log.Printf("[TRON] Payment expired for address %s", payment.Address)
 				payment.Status = "expired"
-				h.tronPayments.UpdateTronPayment(&payment)
+				h.storer.UpdateTronPayment(&payment)
 				continue
 			}
 
@@ -162,10 +159,10 @@ func (h *TronWebhookHandler) CheckPendingPayments() {
 				}
 				
 				payment.Status = "confirmed"
-				payment.ConfirmedAt = time.Now().Unix()
+				payment.ConfirmedAt = time.Now()
 				payment.Confirmations = 25 // Hardcoded for testing, should check actual confirmations on mainnet
 
-				if err := h.tronPayments.UpdateTronPayment(&payment); err != nil {
+				if err := h.storer.UpdateTronPayment(&payment); err != nil {
 					log.Printf("[TRON] Failed to update payment: %v", err)
 					continue
 				}
@@ -181,7 +178,7 @@ func (h *TronWebhookHandler) CheckPendingPayments() {
 					"TxID: "+payment.TxID)
 
 				// Get random photo from database and send to user
-				photo, err := h.photoStore.GetRandomPhoto()
+				photo, err := h.storer.GetRandomPhoto()
 				if err != nil {
 					log.Printf("[TRON] Failed to get random photo: %v", err)
 					continue

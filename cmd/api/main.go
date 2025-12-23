@@ -12,26 +12,17 @@ import (
 	"gobotcat/config"
 	"gobotcat/handlers"
 	"gobotcat/services"
-	"gobotcat/storage"
+	"gobotcat/storer"
 )
 
 func main() {
 	cfg := config.Load()
 
-	// Initialize Payments database
-	db, err := gorm.Open(sqlite.Open("payments.db"), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to connect to Payments database: %v", err)
-	}
-	paymentStore := storage.NewGormPaymentStore(db)
+	// Initialize single database for all data
+	db := openDatabase("app.db")
 	
-	// Initialize Photo database
-	db, err = gorm.Open(sqlite.Open("photo.db"), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to connect to Photo database: %v", err)
-	}
-	photoStore := storage.NewGormPhotoStore(db)
-	
+	// Initialize storer
+	appStorer := storer.NewGormStorer(db)
 
 	// Initialize services
 	stripeService := services.NewStripeService(cfg.StripeSecret)
@@ -41,17 +32,10 @@ func main() {
 		log.Fatalf("Failed to initialize Telegram bot: %v", err)
 	}
 
-	// Initialize Tron payments database
-	tronPaymentsDB, err := gorm.Open(sqlite.Open("tron_payments.db"), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to connect to Tron payments database: %v", err)
-	}
-	tronPaymentStore := storage.NewGormTronPaymentStore(tronPaymentsDB)
-
 	// Initialize handlers
-	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, photoStore, paymentStore, cfg.StripeWebhookSecret)
-	tronWebhookHandler := handlers.NewTronWebhookHandler(tronService, telegramService, tronPaymentStore, photoStore)
-	botHandler := handlers.NewBotHandler(telegramService, stripeService, tronService, cfg.WebhookURL, photoStore, tronPaymentStore)
+	webhookHandler := handlers.NewWebhookHandler(stripeService, telegramService, appStorer, cfg.StripeWebhookSecret)
+	tronWebhookHandler := handlers.NewTronWebhookHandler(tronService, telegramService, appStorer)
+	botHandler := handlers.NewBotHandler(telegramService, stripeService, tronService, cfg.WebhookURL, appStorer)
 
 	// Parse payment templates
 	successTpl := template.Must(template.ParseFiles("templates/success.html"))
@@ -88,4 +72,20 @@ func main() {
 	// Start server
 	fmt.Printf("Starting server on port %s\n", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, nil))
+}
+
+func openDatabase(dbPath string) *gorm.DB{
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to Payments database: %v", err)
+	}
+	
+	sqlDB, err := db.DB()
+	if err != nil {
+        log.Fatalf("Failed to get database connection: %v", err)
+    }
+    defer sqlDB.Close()
+    
+    return db
+
 }

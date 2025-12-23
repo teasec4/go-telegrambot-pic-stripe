@@ -10,23 +10,21 @@ import (
 	"github.com/stripe/stripe-go/v78"
 	"github.com/stripe/stripe-go/v78/webhook"
 	"gobotcat/services"
-	"gobotcat/storage"
+	"gobotcat/storer"
 )
 
 type WebhookHandler struct {
-	stripe             *services.StripeService
-	telegram           *services.TelegramService
-	photoStore         storage.PhotoStore
-	paymentStore       storage.PaymentStore
-	webhookSecret      string
+	stripe        *services.StripeService
+	telegram      *services.TelegramService
+	storer        *storer.GormStorer
+	webhookSecret string
 }
 
-func NewWebhookHandler(stripe *services.StripeService, telegram *services.TelegramService, photoStore storage.PhotoStore, paymentStore storage.PaymentStore, webhookSecret string) *WebhookHandler {
+func NewWebhookHandler(stripe *services.StripeService, telegram *services.TelegramService, storer *storer.GormStorer, webhookSecret string) *WebhookHandler {
 	return &WebhookHandler{
 		stripe:        stripe,
 		telegram:      telegram,
-		photoStore:    photoStore,
-		paymentStore:  paymentStore,
+		storer:        storer,
 		webhookSecret: webhookSecret,
 	}
 }
@@ -90,15 +88,15 @@ func (h *WebhookHandler) handleCheckoutSessionCompleted(sess stripe.CheckoutSess
 		Amount: sess.AmountTotal,
 		Status: "paid",
 	}
-	h.paymentStore.SavePayment(payment)
+	h.storer.SavePayment(payment)
 
 	h.telegram.SendMessage(chatID, "✅ Thank you! Your payment was successful.")
 
 	if sess.PaymentStatus == "paid" {
-		photo, err := h.photoStore.GetRandomPhoto()
+		photo, err := h.storer.GetRandomPhoto()
 		if err != nil || photo == nil {
 			h.telegram.SendMessage(chatID, "❌ No photos found")
-			h.paymentStore.UpdatePaymentStatus(sess.ID, "failed")
+			h.storer.UpdatePaymentStatus(sess.ID, "failed")
 			return
 		}
 
@@ -106,10 +104,10 @@ func (h *WebhookHandler) handleCheckoutSessionCompleted(sess stripe.CheckoutSess
 		if err != nil {
 			log.Printf("Failed to send image: %v\n", err)
 			h.telegram.SendMessage(chatID, "❌ Error sending image")
-			h.paymentStore.UpdatePaymentStatus(sess.ID, "failed")
+			h.storer.UpdatePaymentStatus(sess.ID, "failed")
 			return
 		}
 
-		h.paymentStore.UpdatePaymentStatus(sess.ID, "image_sent")
+		h.storer.UpdatePaymentStatus(sess.ID, "image_sent")
 	}
 }
